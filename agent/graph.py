@@ -1,46 +1,142 @@
-"""전체 흐름: extract → filters → (match, research) → judge → draft → report.
+"""전체 흐름 (LangGraph).
 
-M3: 순차 함수 호출. (M4에서 LangGraph로 옮기며 match·research를 병렬로 돌린다.)
+START → extract → filters ─ FAIL ───────────────→ skip ─────────────────→ END
+                          └ PASS/WARN → match    ┐
+                                        research ┘(병렬) → judge ─ 추천도 ≥ 3 → draft → END
+                                                                 └ 그 외 ──────────────→ END
+
+분기 세 가지: 하드 조건 FAIL이면 매칭·조사를 건너뛰고, 매칭과 회사 조사는 동시에 돌리며,
+추천도가 낮으면 초안을 쓰지 않는다. 회사 조사가 실패해도 나머지 리포트는 끝까지 만든다.
 """
 
 from __future__ import annotations
 
 import logging
+import operator
 import sys
 import time
 from collections import Counter
 from pathlib import Path
-from typing import Sequence
+from typing import Annotated, Any, Callable, Sequence, TypedDict
+
+from langgraph.graph import END, START, StateGraph
 
 from agent import llm
 from agent.extract import PostingImage, extract, load_posting
 from agent.filters import run_filters
-from agent.judge import DRAFT_MIN_SCORE, judge, judge_failed, write_draft
+from agent.judge import DRAFT_MIN_SCORE, Judgement, judge, judge_failed, write_draft
+from agent.llm_json import LLMOutputError
 from agent.match import load_resume, match
-from agent.profile import load_profile
+from agent.profile import Profile, load_profile
 from agent.report import render_report
 from agent.research import research
-from agent.schemas import Report
+from agent.schemas import CompanyInfo, HardFilterResult, JobPosting, MatchResult, Report
 
 logger = logging.getLogger(__name__)
 
+RESEARCH_ERRORS = (llm.LLMRateLimitError, llm.LLMUnavailableError, LLMOutputError)
+
+
+class AnalysisState(TypedDict, total=False):
+    text: str
+    images: Sequence[PostingImage]
+    posting: JobPosting
+    profile: Profile
+    filters: HardFilterResult
+    match: MatchResult
+    company: CompanyInfo
+    judgement: Judgement
+    draft: str
+    timings: Annotated[dict[str, float], operator.or_]  # 노드 이름 → 소요 초. 병렬 노드의 기록을 합친다
+
+
+def _extract(state: AnalysisState) -> dict[str, Any]:
+    return {"posting": extract(state["text"], state["images"])}
+
+
+def _filters(state: AnalysisState) -> dict[str, Any]:
+    profile = load_profile()
+    return {"profile": profile, "filters": run_filters(state["posting"], profile)}
+
+
+def _skip(state: AnalysisState) -> dict[str, Any]:
+    return {"judgement": judge_failed(state["filters"])}
+
+
+def _match(state: AnalysisState) -> dict[str, Any]:
+    return {"match": match(state["posting"], load_resume())}
+
+
+def _research(state: AnalysisState) -> dict[str, Any]:
+    try:
+        return {"company": research(state["posting"])}
+    except RESEARCH_ERRORS as exc:  # 회사 조사는 보조 정보라, 실패해도 분석을 멈추지 않는다
+        logger.warning("[graph] 회사 조사 실패: %s", exc)
+        return {"company": CompanyInfo(facts=[], warnings=[], found=False, error=str(exc))}
+
+
+def _judge(state: AnalysisState) -> dict[str, Any]:
+    judgement = judge(state["posting"], state["filters"], state["match"], state["company"], state["profile"])
+    return {"judgement": judgement}
+
+
+def _draft(state: AnalysisState) -> dict[str, Any]:
+    return {"draft": write_draft(state["posting"], state["match"], state["company"])}
+
+
+def _after_filters(state: AnalysisState) -> list[str]:
+    return ["skip"] if state["filters"].overall == "FAIL" else ["match", "research"]
+
+
+def _after_judge(state: AnalysisState) -> str:
+    return "draft" if state["judgement"].score >= DRAFT_MIN_SCORE else END
+
+
+def _timed(name: str, node: Callable[[AnalysisState], dict[str, Any]]) -> Callable[[AnalysisState], dict[str, Any]]:
+    """노드 실행 시간을 state의 timings에 남긴다."""
+    def run(state: AnalysisState) -> dict[str, Any]:
+        started = time.perf_counter()
+        update = node(state)
+        return {**update, "timings": {name: time.perf_counter() - started}}
+    return run
+
+
+def _build_graph():
+    builder = StateGraph(AnalysisState)
+    nodes = {"extract": _extract, "filters": _filters, "skip": _skip, "match": _match,
+             "research": _research, "judge": _judge, "draft": _draft}
+    for name, node in nodes.items():
+        builder.add_node(name, _timed(name, node))
+    builder.add_edge(START, "extract")
+    builder.add_edge("extract", "filters")
+    builder.add_conditional_edges("filters", _after_filters, ["skip", "match", "research"])
+    builder.add_edge(["match", "research"], "judge")  # 둘 다 끝나야 judge로 간다
+    builder.add_conditional_edges("judge", _after_judge, ["draft", END])
+    builder.add_edge("skip", END)
+    builder.add_edge("draft", END)
+    return builder.compile()
+
+
+_GRAPH = _build_graph()
+
+
+def _log_timings(timings: dict[str, float], elapsed: float) -> None:
+    per_node = ", ".join(f"{name} {seconds:.1f}s" for name, seconds in timings.items())
+    node_total = sum(timings.values())
+    logger.info("[graph] %s", per_node)
+    logger.info("[graph] 노드 합계 %.1f초 → 실제 %.1f초 (병렬 실행으로 %.1f초 단축)",
+                node_total, elapsed, max(node_total - elapsed, 0.0))
+
 
 def analyze(text: str = "", images: Sequence[PostingImage] = ()) -> Report:
-    posting = extract(text, images)
-    profile = load_profile()
-    filters = run_filters(posting, profile)
-
-    if filters.overall == "FAIL":  # 조건 미달이면 매칭·회사 조사를 생략한다
-        failed = judge_failed(filters)
-        return Report(posting=posting, filters=filters, match=None, company=None,
-                      motivation_draft=None, **failed.model_dump())
-
-    match_result = match(posting, load_resume())
-    company = research(posting)
-    judgement = judge(posting, filters, match_result, company, profile)
-    draft = write_draft(posting, match_result, company) if judgement.score >= DRAFT_MIN_SCORE else None
-    return Report(posting=posting, filters=filters, match=match_result, company=company,
-                  motivation_draft=draft, **judgement.model_dump())
+    started = time.perf_counter()
+    state = _GRAPH.invoke({"text": text, "images": list(images), "timings": {}})
+    _log_timings(state["timings"], time.perf_counter() - started)
+    return Report(
+        posting=state["posting"], filters=state["filters"],
+        match=state.get("match"), company=state.get("company"),
+        motivation_draft=state.get("draft"), **state["judgement"].model_dump(),
+    )
 
 
 def call_summary(calls: Sequence[llm.CallRecord]) -> str:
@@ -55,8 +151,11 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     if len(sys.argv) < 2:
         sys.exit("사용법: python -m agent.graph <공고 파일 또는 폴더> [...]")
-    started = time.perf_counter()
+    started_at = time.perf_counter()
     with llm.track_calls() as calls:
-        result = analyze(*load_posting([Path(arg) for arg in sys.argv[1:]]))
+        try:
+            result = analyze(*load_posting([Path(arg) for arg in sys.argv[1:]]))
+        except llm.LLMError as exc:
+            sys.exit(f"분석 실패: {exc}")
     print("\n" + render_report(result))
-    logger.info("\n[요약] %.1f초, %s", time.perf_counter() - started, call_summary(calls))
+    logger.info("\n[요약] %.1f초, %s", time.perf_counter() - started_at, call_summary(calls))

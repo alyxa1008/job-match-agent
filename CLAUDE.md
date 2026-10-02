@@ -133,6 +133,7 @@ class CompanyInfo(BaseModel):
     facts: list[CompanyFact]
     warnings: list[str]               # 인원 급변, 매출 급감 등
     found: bool
+    error: str | None = None          # 조사 자체가 실패한 사유 ("찾았지만 없음"과 구분)
 
 class Report(BaseModel):
     posting: JobPosting
@@ -217,7 +218,7 @@ job-match-agent/
 │   ├── paths.py            # 프로젝트 파일 경로 (profile, resume, 캐시) — 경로는 여기서만 정한다
 │   ├── llm.py              # 모델 호출 단일 진입점 (+ 429·5xx 재시도, 노드별 모델, track_calls()로 분석 단위 호출 기록)
 │   ├── llm_json.py         # 구조화 출력: JSON 응답 Pydantic 검증 + 1회 재시도
-│   ├── llm_cache.py        # 개발·평가용 응답 디스크 캐시 (LLM_CACHE=1)
+│   ├── llm_cache.py        # 개발·평가용 디스크 캐시: LLM 응답 + 도구 결과 (LLM_CACHE=1, 같은 공고는 그대로 재생)
 │   ├── schemas.py          # 4장 Pydantic 모델
 │   ├── profile.py          # profile.yaml 로딩 + 경력(연차) 계산
 │   ├── extract.py          # [extract]
@@ -227,7 +228,7 @@ job-match-agent/
 │   ├── tools.py            # web_search, fetch_page
 │   ├── judge.py            # [judge] + [draft]
 │   ├── report.py           # [report] Report → Markdown
-│   ├── graph.py            # 전체 흐름 (M3: 함수 호출 / M4: LangGraph)
+│   ├── graph.py            # 전체 흐름 (LangGraph: FAIL 조기 종료, match·research 병렬, draft 분기, 조사 실패 허용)
 │   └── store.py            # SQLite
 ├── config/profile.yaml     # 내 기준 (경력, 희망 방향, 지역 등) — 커밋 제외, profile.example.yaml 참고
 ├── data/resume.md          # 연락처 제거한 이력서·경력기술서 — 커밋 제외, resume.example.md 참고

@@ -45,6 +45,39 @@ def test_run_tool_blocked_fetch_has_no_source_url():
     assert output.source_urls == frozenset()
 
 
+@pytest.fixture
+def cache_on(monkeypatch, tmp_path):
+    monkeypatch.setenv("LLM_CACHE", "1")
+    monkeypatch.setattr(tools.llm_cache, "LLM_CACHE_DIR", tmp_path)
+
+
+def test_cached_tool_result_is_replayed_even_if_search_changes(monkeypatch, cache_on):
+    """검색 결과는 실행마다 달라질 수 있다. 캐시가 켜져 있으면 처음 결과를 그대로 재생한다."""
+    answers = iter([
+        [{"title": "첫 결과", "url": "https://news.example.com/1", "snippet": ""}],
+        [{"title": "달라진 결과", "url": "https://news.example.com/2", "snippet": ""}],
+    ])
+    monkeypatch.setattr(tools, "web_search", lambda query: next(answers))
+    first = run_tool("web_search", '{"query": "에이블랩"}')
+    second = run_tool("web_search", '{"query": "에이블랩"}')
+    assert first == second
+    assert second.source_urls == {"https://news.example.com/1"}
+
+
+def test_failed_tool_result_is_not_cached(monkeypatch, cache_on):
+    calls = []
+
+    def flaky_fetch(url):
+        calls.append(url)
+        if len(calls) == 1:
+            raise FetchError("[가져오기 실패] HTTP 503")
+        return "본문"
+
+    monkeypatch.setattr(tools, "fetch_page", flaky_fetch)
+    assert run_tool("fetch_page", '{"url": "https://example.com/a"}').content.startswith("[가져오기 실패]")
+    assert run_tool("fetch_page", '{"url": "https://example.com/a"}').content == "본문"
+
+
 @pytest.mark.parametrize(
     ("name", "arguments", "expected"),
     [

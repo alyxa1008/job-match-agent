@@ -33,15 +33,19 @@ MAX_RETRY_WAIT_SEC = 60.0
 KEY_PLACEHOLDER_PREFIX = "여기에"
 
 
-class LLMConfigError(RuntimeError):
+class LLMError(RuntimeError):
+    """LLM 호출 관련 오류의 공통 부모. 메시지는 사용자에게 그대로 보여줄 수 있는 문장이다."""
+
+
+class LLMConfigError(LLMError):
     """.env 설정이 없거나 잘못됨."""
 
 
-class LLMRateLimitError(RuntimeError):
+class LLMRateLimitError(LLMError):
     """백오프 후에도 429(한도 초과)."""
 
 
-class LLMUnavailableError(RuntimeError):
+class LLMUnavailableError(LLMError):
     """백오프 후에도 5xx(서버 혼잡)."""
 
 

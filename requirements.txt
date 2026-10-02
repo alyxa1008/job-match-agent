@@ -6,6 +6,7 @@ pyyaml>=6.0
 httpx2>=2.0        # openai SDK가 쓰는 HTTP 클라이언트 — fetch_page에서도 사용
 ddgs>=9.0          # DuckDuckGo 검색
 trafilatura>=2.0   # 웹페이지 본문 추출
+langgraph>=1.2     # 전체 흐름(분기·병렬)
 
 # 테스트
 pytest>=8.0

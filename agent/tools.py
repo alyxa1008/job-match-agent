@@ -20,6 +20,8 @@ import httpx2
 import trafilatura
 from ddgs import DDGS
 
+from agent import llm_cache
+
 for noisy_logger in ("ddgs", "primp"):  # 검색 엔진별 요청 로그는 끈다
     logging.getLogger(noisy_logger).setLevel(logging.WARNING)
 
@@ -144,7 +146,23 @@ def fetch_page(url: str) -> str:
 
 
 def run_tool(name: str, arguments: str) -> ToolOutput:
-    """모델이 요청한 도구를 실행한다. 어떤 실패든 예외 대신 사유를 담은 ToolOutput으로 돌려준다."""
+    """모델이 요청한 도구를 실행한다. 어떤 실패든 예외 대신 사유를 담은 ToolOutput으로 돌려준다.
+
+    캐시가 켜져 있으면 성공한 결과를 저장해 두고 같은 호출에 재사용한다(실패는 저장하지 않아 다음에 다시 시도).
+    """
+    cache_path = llm_cache.tool_path_for(name, arguments) if llm_cache.enabled() else None
+    cached = llm_cache.read(cache_path) if cache_path else None
+    if cached is not None:
+        saved = json.loads(cached)
+        return ToolOutput(saved["content"], frozenset(saved["source_urls"]))
+    output = _execute(name, arguments)
+    if cache_path and output.source_urls:
+        saved = {"content": output.content, "source_urls": sorted(output.source_urls)}
+        llm_cache.write(cache_path, json.dumps(saved, ensure_ascii=False))
+    return output
+
+
+def _execute(name: str, arguments: str) -> ToolOutput:
     try:
         args = json.loads(arguments or "{}")
         if name == "web_search":

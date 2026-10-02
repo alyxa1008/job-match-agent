@@ -30,6 +30,7 @@ JUDGE_PROMPT = """너는 지원자의 입장에서 채용공고에 지원할지 
 규칙:
 - 하드 조건의 WARN 항목과 회사 주의사항은 무게를 따져 점수에 반영하고, reasons에도 적는다.
 - reasons는 3~5개. 한 항목은 한 문장. 맞는 점을 먼저, 걸리는 점을 나중에 쓴다. 자료에 없는 내용을 지어내지 않는다.
+  reasons 문장에는 G1 같은 번호를 쓰지 않는다(번호는 key_gap_ids에만).
 - key_gap_ids에는 [빈 점 후보](G번호) 중 실제로 약점이 되는 것만 최대 4개 고른다.
   "경력 무관" 같은 조건 안내나, 이력서로 확인할 수 없는 일반적인 성향 항목은 고르지 않는다.
 """
@@ -74,6 +75,8 @@ def _evidence_lines(match: MatchResult) -> list[str]:
 
 
 def _company_lines(company: CompanyInfo) -> list[str]:
+    if company.error:
+        return ["조사하지 못함 (회사 정보 없이 판단한다)"]
     if not company.found:
         return ["정보 없음"]
     return [f"- {fact.text}" for fact in company.facts] + [f"- 주의: {warning}" for warning in company.warnings]

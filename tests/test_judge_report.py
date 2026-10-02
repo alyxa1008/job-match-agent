@@ -86,6 +86,13 @@ def test_failed_report_is_short():
     ]
 
 
+def test_failed_research_is_shown_differently_from_no_info():
+    failed = CompanyInfo(facts=[], warnings=[], found=False, error="서버 혼잡")
+    text = render_report(make_report(company=failed))
+    assert "[회사]\n · ⚠ 조사하지 못함 — 서버 혼잡" in text
+    assert "정보 없음" not in text
+
+
 def test_company_not_found_says_no_info():
     report = make_report(company=CompanyInfo(facts=[], warnings=[], found=False), motivation_draft=None)
     assert "[회사]\n · 정보 없음" in render_report(report)

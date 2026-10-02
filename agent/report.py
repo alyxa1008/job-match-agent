@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from agent.schemas import HardFilterResult, Report
+from agent.schemas import CompanyInfo, HardFilterResult, Report
 
 MAX_SCORE = 5
 ALWAYS_SHOWN_RULES = {"min_years", "employment_type", "location"}  # PASS여도 보여주는 조건
@@ -20,6 +20,14 @@ def _filter_lines(filters: HardFilterResult) -> list[str]:
         if item.status != "PASS" or item.rule in ALWAYS_SHOWN_RULES:
             lines.append(f" {STATUS_MARKS[item.status]} {item.message}")
     return lines
+
+
+def _company_lines(company: CompanyInfo) -> list[str]:
+    if company.error:
+        return [f" · ⚠ 조사하지 못함 — {company.error}"]
+    lines = [f" · {fact.text}  (출처: {fact.source_url})" for fact in company.facts]
+    lines += [f" · ⚠ {warning}" for warning in company.warnings]
+    return lines or [" · 정보 없음"]
 
 
 def _section(title: str, lines: list[str]) -> list[str]:
@@ -46,9 +54,7 @@ def render_report(report: Report) -> str:
         lines += _section("맞는 점", evidence_lines)
     lines += _section("빈 점", [f" · {gap}" for gap in report.key_gaps])
     if report.company:
-        company_lines = [f" · {fact.text}  (출처: {fact.source_url})" for fact in report.company.facts]
-        company_lines += [f" · ⚠ {warning}" for warning in report.company.warnings]
-        lines += _section("회사", company_lines or [" · 정보 없음"])
+        lines += _section("회사", _company_lines(report.company))
     if report.motivation_draft:
         lines += _section("지원동기 초안", [report.motivation_draft])
     return "\n".join(lines)

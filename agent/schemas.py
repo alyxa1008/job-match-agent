@@ -58,6 +58,7 @@ class CompanyInfo(BaseModel):
     facts: list[CompanyFact]
     warnings: list[str]  # 인원 급변, 매출 급감 등
     found: bool
+    error: str | None = None  # 조사 자체가 실패한 경우의 사유 ("찾았지만 없음"과 구분)
 
 
 class Report(BaseModel):

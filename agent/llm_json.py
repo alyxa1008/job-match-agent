@@ -20,7 +20,7 @@ MAX_JSON_RETRIES = 1
 T = TypeVar("T", bound=BaseModel)
 
 
-class LLMOutputError(RuntimeError):
+class LLMOutputError(llm.LLMError):
     """재시도 후에도 응답이 스키마에 맞지 않음."""
 
 
