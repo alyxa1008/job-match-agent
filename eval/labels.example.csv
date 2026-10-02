@@ -1,0 +1,4 @@
+case_id,company,title,my_decision,expected_filter,reason
+ablelab_aiml,에이블랩,AI / ML 엔지니어,지원,PASS,RAG·서빙 직무가 경력과 거의 맞음
+visionworks_data,비전웍스,데이터 분석 AI 엔지니어,스킵,FAIL,경력 3년 이상 필수 → 경력 미달
+samplebank_plan,샘플은행,AI 기획 (계약직),스킵,WARN,계약직 + 기획 직무로 방향이 다름

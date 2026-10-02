@@ -1,0 +1,4 @@
+# 이후 단계 의존성은 그 단계에서 추가
+openai>=1.50
+python-dotenv>=1.0
+pydantic>=2.0

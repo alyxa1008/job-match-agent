@@ -1,0 +1,15 @@
+.env
+data/app.db
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.DS_Store
+
+# 개인 데이터 — 로컬에만 둔다 (*.example 파일을 복사해 작성)
+data/resume.md
+config/profile.yaml
+eval/labels.csv
+eval/cases/*
+!eval/cases/README.md
+START_PROMPT.md
