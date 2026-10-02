@@ -68,4 +68,5 @@ class Report(BaseModel):
     score: int  # 1~5
     verdict: Verdict
     reasons: list[str]
+    key_gaps: list[str]  # match.gaps 중 실제 약점으로 고른 것 (리포트의 [빈 점])
     motivation_draft: str | None

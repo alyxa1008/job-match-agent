@@ -12,7 +12,8 @@ from pathlib import Path
 import yaml
 from pydantic import BaseModel
 
-PROFILE_PATH = Path(__file__).resolve().parent.parent / "config" / "profile.yaml"
+from agent.paths import PROFILE_PATH
+
 DAYS_PER_MONTH = 365.25 / 12
 MONTHS_PER_YEAR = 12
 FLOAT_EPSILON = 1e-9  # 29/12*12 = 28.999… 같은 부동소수 오차로 한 달이 깎이지 않게

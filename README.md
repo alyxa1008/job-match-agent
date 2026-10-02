@@ -1,8 +1,10 @@
 # job-match-agent — 채용공고 매칭 Agent
 
+[![tests](https://github.com/alyxa1008/job-match-agent/actions/workflows/tests.yml/badge.svg)](https://github.com/alyxa1008/job-match-agent/actions/workflows/tests.yml)
+
 채용공고 텍스트나 캡처 이미지를 넣으면, 내 이력서·기준과 대조해 **지원 여부를 판단하고 근거·회사 정보·지원동기 초안까지 만들어 주는 개인용 AI Agent**입니다.
 
-> **상태: 개발 진행 중.** 지금은 공고 추출과 하드 필터(M2)까지 끝났고, 아래 [진행 상황](#진행-상황)에 단계별 현황을 적어 둡니다. 평가 수치는 평가 단계(M6)에서 채웁니다.
+> **상태: 개발 진행 중.** 지금은 CLI에서 공고를 넣으면 리포트가 나오는 단계(M3)까지 끝났고, 아래 [진행 상황](#진행-상황)에 단계별 현황을 적어 둡니다. 평가 수치는 평가 단계(M6)에서 채웁니다.
 
 ## 왜 만들었나
 
@@ -56,8 +58,8 @@
 ## 설계 원칙
 
 1. **숫자·규칙 판정은 LLM이 아니라 코드가 한다.** 경력 연차 비교, 고용형태, 키워드 경고는 순수 함수(`filters.py`)로 처리하고 pytest로 검증합니다. LLM은 공고에서 값을 추출만 합니다.
-2. **모든 "맞는 점"에는 이력서 원문 인용을 근거로 단다.** 인용이 이력서에 실제로 있는지 코드로 확인하고, 없으면 그 항목을 버립니다(환각 방지).
-3. **회사 정보는 반드시 출처 URL과 함께.** 찾지 못하면 "정보 없음"이라고 쓰고 추측으로 채우지 않습니다.
+2. **모든 "맞는 점"에는 이력서 원문 인용을 근거로 단다.** 인용이 이력서에 실제로 있는지 코드로 확인하고, 없으면 그 항목을 버립니다(환각 방지). 빈 점과 필수요건 충족 비율도 모델이 아니라 코드가 계산합니다.
+3. **회사 정보는 반드시 출처 URL과 함께.** 도구 결과에 실제로 나온 URL만 출처로 인정하고, 찾지 못하면 "정보 없음"이라고 씁니다. 추측으로 채우지 않습니다.
 4. **Agent다운 분기.** 하드 조건 FAIL이면 조사를 생략하고, 회사명이 흔해 검색 결과가 어긋나면 업종 키워드를 붙여 재검색하며, 추천도가 낮으면 초안을 만들지 않습니다.
 5. **모델 교체 가능.** LLM 호출은 `agent/llm.py` 한 곳에서만 하고, 모델명·엔드포인트는 환경변수로 둡니다.
 6. **이력서는 RAG 없이 통째로 컨텍스트에 넣는다.** 5쪽 분량이라 검색 단계를 둘 이유가 없습니다.
@@ -85,10 +87,10 @@ cp .env.example .env                          # LLM_API_KEY 입력 (Google AI St
 cp config/profile.example.yaml config/profile.yaml
 cp data/resume.example.md data/resume.md      # 자기 이력서로 교체
 
-.venv/bin/python -m agent.llm                             # 모델 호출 확인
-.venv/bin/python -m agent.extract 공고.png                 # 공고 → JobPosting JSON
-.venv/bin/python -m agent.extract 공고1.png 공고2.png 메모.txt   # 여러 장 + 텍스트
-.venv/bin/python -m pytest                                # 하드 필터 테스트
+.venv/bin/python -m agent.graph 공고.png                   # 전체 분석 → Markdown 리포트
+.venv/bin/python -m agent.graph 공고1.png 공고2.png 메모.txt     # 캡처 여러 장 + 텍스트
+.venv/bin/python -m agent.extract 공고.png                 # 추출 단계만 (JobPosting JSON)
+.venv/bin/python -m pytest                                # 테스트 (LLM 호출 없음)
 ```
 
 무료 API 한도는 모델별로 따로 계산됩니다. `.env`에서 노드별 모델(`LLM_MODEL_EXTRACT` 등)을 나눠 지정할 수 있고, `LLM_CACHE=1`이면 같은 요청은 저장한 응답을 재사용해 개발·평가 중에 한도를 쓰지 않습니다.
@@ -100,7 +102,7 @@ cp data/resume.example.md data/resume.md      # 자기 이력서로 교체
 | M0 | 저장소 뼈대, LLM 호출 단일 진입점(`llm.py`: 429·503 재시도, 노드별 모델 지정, 시간·토큰 로깅, 개발용 응답 캐시) | 완료 |
 | M1 | 데이터 구조(`schemas.py`), 공고 추출(`extract.py`: 텍스트·이미지 입력) | 완료 |
 | M2 | 하드 필터(`filters.py`), 경력 계산(`profile.py`), 단위 테스트 25개 | 완료 |
-| M3 | 매칭, 회사 조사(Tool Calling 루프), 판단, 리포트 | 예정 |
+| M3 | 매칭(`match.py`: 인용 검증), 회사 조사(`research.py`·`tools.py`: Tool Calling 루프, 출처 검증), 판단·초안(`judge.py`), 리포트(`report.py`), 전체 흐름(`graph.py`) | 완료 |
 | M4 | LangGraph 이전 (조기 종료·병렬·조건 분기) | 예정 |
 | M5 | SQLite 저장 + FastAPI 웹 화면 | 예정 |
 | M6 | 평가 스크립트: 직접 판단한 공고 라벨 대비 판단 일치율, 하드 필터 정확도, 평균 응답 시간·LLM 호출 수 | 예정 |

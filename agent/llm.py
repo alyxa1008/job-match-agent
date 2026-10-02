@@ -1,7 +1,8 @@
 """LLM 호출 단일 진입점.
 
 모델명·base_url·API 키는 .env에서 읽는다. 다른 모듈은 openai SDK를 직접 쓰지 않고
-여기의 chat()만 호출한다. 호출마다 노드 이름·모델·소요 시간·토큰 수를 call_log에 남긴다.
+여기의 chat()만 호출한다. 호출마다 노드 이름·모델·소요 시간·토큰 수를 로그로 남기고,
+track_calls() 블록 안에서는 그 기록을 모아 준다.
 """
 
 from __future__ import annotations
@@ -10,8 +11,10 @@ import logging
 import os
 import re
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterator
 
 from dotenv import load_dotenv
 from openai import InternalServerError, OpenAI, RateLimitError
@@ -52,9 +55,23 @@ class CallRecord:
     cached: bool  # True면 디스크 캐시 응답 (실제 호출 아님)
 
 
-call_log: list[CallRecord] = []
-
+_active_calls: ContextVar[list[CallRecord] | None] = ContextVar("llm_active_calls", default=None)
 _client: OpenAI | None = None
+
+
+@contextmanager
+def track_calls() -> Iterator[list[CallRecord]]:
+    """이 블록 안에서 일어난 LLM 호출 기록을 모은다.
+
+    분석 1건 단위로 열고 닫는다. 기록을 전역에 쌓지 않으므로 서버로 오래 띄워도 늘어나지 않고,
+    동시에 처리하는 요청끼리 기록이 섞이지 않는다.
+    """
+    calls: list[CallRecord] = []
+    token = _active_calls.set(calls)
+    try:
+        yield calls
+    finally:
+        _active_calls.reset(token)
 
 
 def _env(name: str) -> str:
@@ -86,7 +103,9 @@ def _record(node: str, model: str, seconds: float, usage: Any, *, cached: bool =
         completion_tokens=getattr(usage, "completion_tokens", 0) or 0,
         cached=cached,
     )
-    call_log.append(record)
+    active_calls = _active_calls.get()
+    if active_calls is not None:
+        active_calls.append(record)
     if cached:
         logger.info("[llm] node=%s model=%s 캐시 사용", node, model)
         return
@@ -141,19 +160,16 @@ def chat(messages: list[dict[str, Any]], *, node: str, **kwargs: Any) -> ChatCom
     node: 호출한 노드 이름(로그 집계, 노드별 모델 선택). kwargs는 tools, response_format 등 SDK 인자 그대로.
     """
     model = _model_for(node)
-    if llm_cache.enabled():
-        cached = llm_cache.load(model, messages, kwargs)
+    cache_path = llm_cache.path_for(model, messages, kwargs) if llm_cache.enabled() else None
+    if cache_path:
+        cached = llm_cache.load(cache_path)
         if cached is not None:
             _record(node, model, 0.0, None, cached=True)
             return cached
     message = _call_with_retry(model, messages, node, kwargs)
-    if llm_cache.enabled():
-        llm_cache.save(model, messages, kwargs, message)
+    if cache_path:
+        llm_cache.save(cache_path, message)
     return message
-
-
-def reset_call_log() -> None:
-    call_log.clear()
 
 
 if __name__ == "__main__":

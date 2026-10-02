@@ -30,11 +30,12 @@ def json_instruction(schema: type[BaseModel]) -> str:
     return f"아래 JSON Schema를 따르는 JSON 객체 하나만 출력한다. 설명 문장은 쓰지 않는다.\n{schema_json}"
 
 
-def _strip_code_fence(raw: str) -> str:
-    text = raw.strip()
+def parse_json(raw: str | None, schema: type[T]) -> T:
+    """모델 응답 텍스트를 schema로 검증한다. ```json 코드 블록으로 감싼 응답도 받는다. 실패하면 ValidationError."""
+    text = (raw or "").strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[-1].rsplit("```", 1)[0]
-    return text
+    return schema.model_validate_json(text)
 
 
 def chat_json(messages: list[dict[str, Any]], schema: type[T], *, node: str) -> T:
@@ -45,7 +46,7 @@ def chat_json(messages: list[dict[str, Any]], schema: type[T], *, node: str) -> 
         reply = llm.chat(messages, node=node, response_format={"type": "json_object"})
         raw = reply.content or ""
         try:
-            return schema.model_validate_json(_strip_code_fence(raw))
+            return parse_json(raw, schema)
         except ValidationError as exc:
             if attempt >= MAX_JSON_RETRIES:
                 raise LLMOutputError(f"{node}: 모델 응답이 {schema.__name__} 형식에 맞지 않습니다.") from exc

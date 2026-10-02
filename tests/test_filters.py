@@ -1,15 +1,15 @@
 """하드 필터 규칙 테스트. 가상의 프로필·공고만 쓴다(개인 데이터 파일을 읽지 않는다)."""
 
 from datetime import date
-from pathlib import Path
 
 import pytest
 
 from agent.filters import run_filters
+from agent.paths import ROOT
 from agent.profile import Employment, Me, Profile, Rules, Target, career_years, format_years, load_profile
-from agent.schemas import JobPosting
+from tests.factories import make_posting
 
-EXAMPLE_PROFILE = Path(__file__).resolve().parent.parent / "config" / "profile.example.yaml"
+EXAMPLE_PROFILE = ROOT / "config" / "profile.example.yaml"
 
 
 def make_profile(**rule_overrides) -> Profile:
@@ -29,16 +29,6 @@ def make_profile(**rule_overrides) -> Profile:
         target=Target(avoid_job_families=["PM/기획", "보안/컴플라이언스", "영업"]),
         rules=Rules(**{**rules, **rule_overrides}),
     )
-
-
-def make_posting(**overrides) -> JobPosting:
-    """아무 조건에도 걸리지 않는 공고."""
-    base = dict(
-        company="(주)에이블랩", title="AI/ML 엔지니어", employment_type="정규직", is_new_grad_only=False,
-        min_years=None, max_years=None, location="서울 관악구", job_family="AI/ML 엔지니어",
-        required=[], preferred=[], duties=[], flags=[],
-    )
-    return JobPosting(**{**base, **overrides})
 
 
 def status_of(result, rule: str) -> str:

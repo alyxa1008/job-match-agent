@@ -140,8 +140,9 @@ class Report(BaseModel):
     match: MatchResult | None
     company: CompanyInfo | None
     score: int                        # 1~5
-    verdict: Literal["지원 추천", "지원 가능", "보류", "스킵 권장"]
+    verdict: Literal["지원 추천", "지원 가능", "보류", "스킵 권장"]   # score에서 코드가 정함: 5/4/3/2·1
     reasons: list[str]
+    key_gaps: list[str]               # match.gaps 중 실제 약점으로 고른 것 (최대 4개)
     motivation_draft: str | None
 ```
 
@@ -170,12 +171,12 @@ class Report(BaseModel):
 
 ## 6. 도구 (Tool Calling 대상)
 
-`research` 노드에서 LLM이 아래 도구를 골라 쓰는 **Tool Calling 루프**로 구현한다 (최대 반복 6회).
+`research` 노드에서 LLM이 아래 도구를 골라 쓰는 **Tool Calling 루프**로 구현한다 (LLM 호출 최대 4회: 도구 라운드 3 + 최종 정리 1, 라운드당 도구 3개까지 — 무료 한도에 맞춰 6회에서 줄임).
 
 | 도구 | 설명 |
 |---|---|
-| `web_search(query: str) -> list[{title, url, snippet}]` | DuckDuckGo 검색 라이브러리 사용 (키 불필요). 패키지명은 설치 시 최신 이름 확인 (`ddgs` 또는 `duckduckgo-search`) |
-| `fetch_page(url: str) -> str` | httpx로 가져와 본문 텍스트만 추출(최대 8,000자). robots.txt 차단·로그인 필요 페이지는 시도하지 않는다 |
+| `web_search(query: str) -> list[{title, url, snippet}]` | `ddgs` 라이브러리 사용 (키 불필요) |
+| `fetch_page(url: str) -> str` | `httpx2`(openai SDK와 같은 클라이언트)로 가져와 `trafilatura`로 본문 텍스트만 추출(최대 8,000자). robots.txt 차단·로그인 필요 페이지·내부 주소는 시도하지 않는다 |
 
 - 우선 확인할 소스: thevc.kr, innoforest.co.kr, 회사 공식 홈페이지, 뉴스 기사.
 - 잡플래닛 등 로그인/차단 페이지는 검색 결과 스니펫까지만 사용.
@@ -213,7 +214,8 @@ job-match-agent/
 ├── app.py                  # FastAPI (분석·결정·기록 API + 정적 파일 서빙)
 ├── web/                    # index.html, app.js, style.css
 ├── agent/
-│   ├── llm.py              # 모델 호출 단일 진입점 (+ 429·5xx 재시도, 노드별 모델, 토큰/시간 로깅)
+│   ├── paths.py            # 프로젝트 파일 경로 (profile, resume, 캐시) — 경로는 여기서만 정한다
+│   ├── llm.py              # 모델 호출 단일 진입점 (+ 429·5xx 재시도, 노드별 모델, track_calls()로 분석 단위 호출 기록)
 │   ├── llm_json.py         # 구조화 출력: JSON 응답 Pydantic 검증 + 1회 재시도
 │   ├── llm_cache.py        # 개발·평가용 응답 디스크 캐시 (LLM_CACHE=1)
 │   ├── schemas.py          # 4장 Pydantic 모델
@@ -224,6 +226,7 @@ job-match-agent/
 │   ├── research.py         # [research] Tool Calling 루프
 │   ├── tools.py            # web_search, fetch_page
 │   ├── judge.py            # [judge] + [draft]
+│   ├── report.py           # [report] Report → Markdown
 │   ├── graph.py            # 전체 흐름 (M3: 함수 호출 / M4: LangGraph)
 │   └── store.py            # SQLite
 ├── config/profile.yaml     # 내 기준 (경력, 희망 방향, 지역 등) — 커밋 제외, profile.example.yaml 참고
@@ -232,8 +235,9 @@ job-match-agent/
 │   ├── cases/              # 공고 원문: <case id>.txt / <case id>.png·jpg / <case id>/ 폴더(여러 장)
 │   ├── labels.csv          # case id, 내 판단(지원/보류/스킵), 하드필터 기대값, 이유 — 커밋 제외, labels.example.csv 참고
 │   └── run_eval.py         # 판단 일치율, 하드필터 정확도, 평균 시간·호출 수 출력
-└── tests/
-    └── test_filters.py
+└── tests/                  # LLM·네트워크 없이 도는 단위 테스트 (가짜 클라이언트 사용)
+    ├── factories.py        # 가상 공고 생성 (make_posting) — 테스트 데이터는 여기서 공유
+    └── test_*.py           # filters, match, research, tools, llm, judge_report, graph
 ```
 
 ---
@@ -266,6 +270,8 @@ job-match-agent/
 - **사실 생성 금지:** 회사 정보·이력서 근거는 출처/원문이 있는 것만. 없으면 "정보 없음".
 - **한국어 출력.** 리포트·UI 문구는 한국어, 코드·변수명은 영어.
 - 코드 스타일: 타입 힌트, 함수는 짧게, 노드별 모듈 분리.
+- **상태를 전역에 쌓지 않는다.** 분석 1건의 기록(LLM 호출 등)은 `llm.track_calls()`처럼 요청 단위로 모으고 버린다. 서버로 오래 떠 있어도 늘어나지 않아야 한다.
+- **외부에서 받는 데이터는 크기를 제한한다.** 웹페이지는 `tools.py`에서 2MB·8,000자까지만 읽는다.
 
 ---
 
