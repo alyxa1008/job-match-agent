@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
 
-from agent.llm import chat_json, json_instruction
+from agent.llm_json import chat_json, json_instruction
 from agent.schemas import JobPosting
 
 IMAGE_MIME_TYPES = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg"}
@@ -31,7 +31,8 @@ SYSTEM_PROMPT = """너는 채용공고에서 정보를 추출하는 도구다. �
 - location: 근무지를 적힌 그대로(시·구 단위까지). 없으면 null.
 - job_family: 주요업무를 기준으로 가장 가까운 것 하나.
 - required, preferred, duties: 자격요건, 우대사항, 주요업무 항목을 원문 그대로 한 항목씩. 요약·의역하지 않는다. 없으면 빈 배열.
-- flags: 제목·본문에 나오는 대상 제한 키워드를 그대로. 예: "전문연구요원", "병역특례", "군대체복무", "산업기능요원", "석사졸업예정자". 없으면 빈 배열.
+- flags: 지원 대상을 한정하는 키워드를 그대로. 예: "전문연구요원", "병역특례", "군대체복무", "산업기능요원", "석사졸업예정자".
+  공고 제목에 붙어 있거나 본문에서 모집 대상으로 명시된 것만 넣는다. "병역특례 지원 가능"처럼 허용만 하는 문구나 "졸업예정자 우대" 같은 우대 문구는 넣지 않는다. 없으면 빈 배열.
 """
 
 

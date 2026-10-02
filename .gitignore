@@ -1,5 +1,6 @@
 .env
 data/app.db
+data/llm_cache/
 __pycache__/
 *.pyc
 .venv/
