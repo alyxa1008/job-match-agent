@@ -6,3 +6,5 @@ ROOT = Path(__file__).resolve().parent.parent
 PROFILE_PATH = ROOT / "config" / "profile.yaml"
 RESUME_PATH = ROOT / "data" / "resume.md"
 LLM_CACHE_DIR = ROOT / "data" / "llm_cache"
+DB_PATH = ROOT / "data" / "app.db"
+WEB_DIR = ROOT / "web"

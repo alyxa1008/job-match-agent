@@ -4,7 +4,7 @@
 
 채용공고 텍스트나 캡처 이미지를 넣으면, 내 이력서·기준과 대조해 **지원 여부를 판단하고 근거·회사 정보·지원동기 초안까지 만들어 주는 개인용 AI Agent**입니다.
 
-> **상태: 개발 진행 중.** 지금은 CLI에서 공고를 넣으면 LangGraph 흐름으로 리포트가 나오는 단계(M4)까지 끝났고, 아래 [진행 상황](#진행-상황)에 단계별 현황을 적어 둡니다. 평가 수치는 평가 단계(M6)에서 채웁니다.
+> **상태: 개발 진행 중.** 브라우저 화면에서 공고를 넣고 결정을 기록하는 단계(M5)까지 끝났고, 아래 [진행 상황](#진행-상황)에 단계별 현황을 적어 둡니다. 평가 수치는 평가 단계(M6)에서 채웁니다.
 
 ## 왜 만들었나
 
@@ -87,11 +87,14 @@ cp .env.example .env                          # LLM_API_KEY 입력 (Google AI St
 cp config/profile.example.yaml config/profile.yaml
 cp data/resume.example.md data/resume.md      # 자기 이력서로 교체
 
-.venv/bin/python -m agent.graph 공고.png                   # 전체 분석 → Markdown 리포트
+.venv/bin/python app.py                                   # 웹 화면: http://127.0.0.1:8000 (내 컴퓨터에서만 접속)
+.venv/bin/python -m agent.graph 공고.png                   # 터미널에서 전체 분석 → Markdown 리포트
 .venv/bin/python -m agent.graph 공고1.png 공고2.png 메모.txt     # 캡처 여러 장 + 텍스트
 .venv/bin/python -m agent.extract 공고.png                 # 추출 단계만 (JobPosting JSON)
 .venv/bin/python -m pytest                                # 테스트 (LLM 호출 없음)
 ```
+
+웹 화면에서는 공고 텍스트를 붙여넣거나 캡처(png·jpg, 최대 6장)를 올리면 추출 → 하드 필터 → 매칭·회사 조사 → 판단 → 초안 단계가 실시간으로 표시되고, 리포트 아래 [지원함] [보류] [스킵]으로 결정을 기록합니다. 기록 탭에서 지난 분석을 다시 볼 수 있습니다. 결과는 `data/app.db`(SQLite)에 남습니다.
 
 무료 API 한도는 모델별로 따로 계산됩니다. `.env`에서 노드별 모델(`LLM_MODEL_EXTRACT` 등)을 나눠 지정할 수 있고, `LLM_CACHE=1`이면 LLM 응답과 검색 결과를 저장해 두었다가 같은 공고를 다시 분석할 때 호출 없이 그대로 재생합니다(개발·평가 중 한도 절약, 결과 재현).
 
@@ -116,7 +119,7 @@ cp data/resume.example.md data/resume.md      # 자기 이력서로 교체
 | M2 | 하드 필터(`filters.py`), 경력 계산(`profile.py`), 단위 테스트 25개 | 완료 |
 | M3 | 매칭(`match.py`: 인용 검증), 회사 조사(`research.py`·`tools.py`: Tool Calling 루프, 출처 검증), 판단·초안(`judge.py`), 리포트(`report.py`), 전체 흐름(`graph.py`) | 완료 |
 | M4 | LangGraph 이전(`graph.py`): 하드 조건 FAIL 시 조기 종료, 매칭·회사 조사 병렬, 추천도에 따른 초안 분기, 회사 조사 실패 시에도 리포트 완성 | 완료 |
-| M5 | SQLite 저장 + FastAPI 웹 화면 | 예정 |
+| M5 | SQLite 저장(`store.py`) + FastAPI(`app.py`) + 웹 화면(`web/`): 텍스트·캡처 입력, 진행 단계 실시간 표시, 리포트, 결정 버튼, 기록 탭 | 완료 |
 | M6 | 평가 스크립트: 직접 판단한 공고 라벨 대비 판단 일치율, 하드 필터 정확도, 평균 응답 시간·LLM 호출 수 | 예정 |
 
 ## 개인 데이터

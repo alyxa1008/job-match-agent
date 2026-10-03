@@ -195,7 +195,7 @@ class Report(BaseModel):
 | Agent | **M3까지는 직접 짠 루프**, M4에서 **LangGraph**로 이전 |
 | 검색 | DuckDuckGo 검색 라이브러리 + httpx + 본문 추출(trafilatura 또는 BeautifulSoup) |
 | 저장 | SQLite (`data/app.db`) — 분석 결과와 내 결정 |
-| 화면 | FastAPI + 정적 HTML/CSS/JS 한 벌(빌드 도구 없음). `127.0.0.1`에만 바인딩하는 내부용. 분석 진행 단계는 SSE로 실시간 전송 |
+| 화면 | FastAPI + 정적 HTML/CSS/JS 한 벌(빌드 도구 없음). `127.0.0.1`에만 바인딩하는 내부용. 분석 진행 단계는 NDJSON 스트림(POST 응답)으로 실시간 전송 — 분석은 별도 스레드에서 돌리고 큐로 이벤트를 넘긴다 |
 | 테스트 | pytest (filters는 필수) |
 | 배포 | 없음 (로컬 전용) |
 
@@ -212,8 +212,8 @@ job-match-agent/
 ├── .env.example            # LLM_BASE_URL, LLM_MODEL, LLM_API_KEY
 ├── .gitignore              # .env, data/app.db, __pycache__ 등
 ├── requirements.txt
-├── app.py                  # FastAPI (분석·결정·기록 API + 정적 파일 서빙)
-├── web/                    # index.html, app.js, style.css
+├── app.py                  # FastAPI: POST /api/analyze(NDJSON 스트림), /api/analyses(기록·결정) + 정적 파일. 127.0.0.1 전용
+├── web/                    # index.html, app.js, style.css — 빌드 없는 바닐라 JS. 리포트는 JSON으로 받아 DOM으로 그린다
 ├── agent/
 │   ├── paths.py            # 프로젝트 파일 경로 (profile, resume, 캐시) — 경로는 여기서만 정한다
 │   ├── llm.py              # 모델 호출 단일 진입점 (+ 429·5xx 재시도, 노드별 모델, track_calls()로 분석 단위 호출 기록)
@@ -229,7 +229,7 @@ job-match-agent/
 │   ├── judge.py            # [judge] + [draft]
 │   ├── report.py           # [report] Report → Markdown
 │   ├── graph.py            # 전체 흐름 (LangGraph: FAIL 조기 종료, match·research 병렬, draft 분기, 조사 실패 허용)
-│   └── store.py            # SQLite
+│   └── store.py            # SQLite (data/app.db): 리포트 JSON 통째 저장 + 목록용 열 + 내 결정
 ├── config/profile.yaml     # 내 기준 (경력, 희망 방향, 지역 등) — 커밋 제외, profile.example.yaml 참고
 ├── data/resume.md          # 연락처 제거한 이력서·경력기술서 — 커밋 제외, resume.example.md 참고
 ├── eval/

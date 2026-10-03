@@ -16,8 +16,9 @@ import operator
 import sys
 import time
 from collections import Counter
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Annotated, Any, Callable, Sequence, TypedDict
+from typing import Annotated, Any, Callable, Iterator, Sequence, TypedDict
 
 from langgraph.graph import END, START, StateGraph
 
@@ -128,15 +129,52 @@ def _log_timings(timings: dict[str, float], elapsed: float) -> None:
                 node_total, elapsed, max(node_total - elapsed, 0.0))
 
 
-def analyze(text: str = "", images: Sequence[PostingImage] = ()) -> Report:
-    started = time.perf_counter()
-    state = _GRAPH.invoke({"text": text, "images": list(images), "timings": {}})
-    _log_timings(state["timings"], time.perf_counter() - started)
+@dataclass(frozen=True)
+class NodeDone:
+    """노드 하나가 끝났다는 알림. next는 이어서 시작되는 노드들(화면의 진행 표시용)."""
+    name: str
+    seconds: float
+    next: list[str]
+
+
+def _next_nodes(name: str, state: dict[str, Any]) -> list[str]:
+    if name == "extract":
+        return ["filters"]
+    if name == "filters":
+        return _after_filters(state)
+    if name in ("match", "research"):
+        return ["judge"] if "match" in state and "company" in state else []
+    if name == "judge":
+        return ["draft"] if _after_judge(state) == "draft" else []
+    return []
+
+
+def _to_report(state: dict[str, Any]) -> Report:
     return Report(
         posting=state["posting"], filters=state["filters"],
         match=state.get("match"), company=state.get("company"),
         motivation_draft=state.get("draft"), **state["judgement"].model_dump(),
     )
+
+
+def run(text: str = "", images: Sequence[PostingImage] = ()) -> Iterator[NodeDone | Report]:
+    """노드가 끝날 때마다 NodeDone을, 마지막에 Report를 낸다. 화면이 진행 상황을 보여줄 때 쓴다."""
+    started = time.perf_counter()
+    state: dict[str, Any] = {"timings": {}}
+    initial = {"text": text, "images": list(images), "timings": {}}
+    for update in _GRAPH.stream(initial, stream_mode="updates"):
+        for name, patch in update.items():
+            state["timings"] |= patch.pop("timings", {})
+            state.update(patch)
+            yield NodeDone(name, state["timings"][name], _next_nodes(name, state))
+    _log_timings(state["timings"], time.perf_counter() - started)
+    yield _to_report(state)
+
+
+def analyze(text: str = "", images: Sequence[PostingImage] = ()) -> Report:
+    *_, report = run(text, images)
+    assert isinstance(report, Report)
+    return report
 
 
 def call_summary(calls: Sequence[llm.CallRecord]) -> str:

@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Job Match Agent</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">Job Match Agent</div>
+    <nav class="tabs" role="tablist">
+      <button class="tab is-active" data-tab="analyze" role="tab">분석</button>
+      <button class="tab" data-tab="history" role="tab">기록</button>
+    </nav>
+  </header>
+
+  <main>
+    <!-- 분석 탭 -->
+    <section id="tab-analyze" class="tab-panel is-active">
+      <div class="columns">
+        <div class="panel input-panel">
+          <h2>공고 넣기</h2>
+          <textarea id="posting-text" rows="12" placeholder="공고 텍스트를 붙여넣으세요. 캡처만 넣어도 됩니다."></textarea>
+          <div id="dropzone" class="dropzone" tabindex="0">
+            <p><strong>캡처 이미지</strong>를 끌어다 놓거나, 여기를 누르고 <kbd>Ctrl</kbd>+<kbd>V</kbd>로 붙여넣으세요.</p>
+            <p class="hint">png·jpg, 최대 6장. 주요업무부터 근무조건까지 다 보이게 2~3장으로 나눠 찍는 게 좋습니다.</p>
+            <input id="file-input" type="file" accept="image/png,image/jpeg" multiple hidden>
+          </div>
+          <ul id="thumbs" class="thumbs"></ul>
+          <div class="actions">
+            <button id="analyze-btn" class="primary">분석하기</button>
+            <button id="clear-btn" class="ghost">지우기</button>
+          </div>
+          <p id="input-error" class="error" hidden></p>
+        </div>
+
+        <div class="panel result-panel">
+          <ol id="steps" class="steps" aria-label="진행 단계">
+            <li data-step="extract"><span class="dot"></span>추출<span class="time"></span></li>
+            <li data-step="filters"><span class="dot"></span>하드 필터<span class="time"></span></li>
+            <li data-step="match"><span class="dot"></span>매칭<span class="time"></span></li>
+            <li data-step="research"><span class="dot"></span>회사 조사<span class="time"></span></li>
+            <li data-step="judge"><span class="dot"></span>판단<span class="time"></span></li>
+            <li data-step="draft"><span class="dot"></span>초안<span class="time"></span></li>
+          </ol>
+          <p id="run-summary" class="run-summary" hidden></p>
+          <div id="report" class="report">
+            <p class="placeholder">공고를 넣고 [분석하기]를 누르면 여기에 리포트가 나옵니다.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 기록 탭 -->
+    <section id="tab-history" class="tab-panel">
+      <div class="columns">
+        <div class="panel history-panel">
+          <h2>기록</h2>
+          <table class="history">
+            <thead><tr><th>날짜</th><th>회사 · 공고</th><th>추천도</th><th>결정</th></tr></thead>
+            <tbody id="history-rows"></tbody>
+          </table>
+          <p id="history-empty" class="placeholder" hidden>아직 분석한 공고가 없습니다.</p>
+        </div>
+        <div class="panel result-panel">
+          <div id="history-report" class="report">
+            <p class="placeholder">왼쪽 목록에서 공고를 고르면 리포트가 나옵니다.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <template id="report-template">
+    <article class="report-body">
+      <header class="report-head">
+        <h3 class="report-title"></h3>
+        <div class="verdict"><span class="stars"></span><span class="verdict-text badge"></span></div>
+      </header>
+      <section class="report-section filters"><h4></h4><ul></ul></section>
+      <section class="report-section reasons"><h4>판단 이유</h4><ul></ul></section>
+      <section class="report-section matched"><h4>맞는 점</h4><ul></ul></section>
+      <section class="report-section gaps"><h4>빈 점</h4><ul></ul></section>
+      <section class="report-section company"><h4>회사</h4><ul></ul></section>
+      <section class="report-section draft"><h4>지원동기 초안</h4><p></p></section>
+      <footer class="report-foot">
+        <div class="decision">
+          <span>내 결정:</span>
+          <button data-decision="지원함">지원함</button>
+          <button data-decision="보류">보류</button>
+          <button data-decision="스킵">스킵</button>
+        </div>
+        <button class="ghost copy-md">Markdown 복사</button>
+      </footer>
+    </article>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

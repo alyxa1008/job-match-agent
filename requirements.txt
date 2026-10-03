@@ -7,6 +7,9 @@ httpx2>=2.0        # openai SDK가 쓰는 HTTP 클라이언트 — fetch_page에
 ddgs>=9.0          # DuckDuckGo 검색
 trafilatura>=2.0   # 웹페이지 본문 추출
 langgraph>=1.2     # 전체 흐름(분기·병렬)
+fastapi>=0.115     # 로컬 웹 화면 API
+uvicorn>=0.30      # FastAPI 실행
+python-multipart>=0.0.9  # 캡처 파일 업로드
 
 # 테스트
 pytest>=8.0
