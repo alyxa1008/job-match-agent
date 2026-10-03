@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from agent.schemas import CompanyInfo, HardFilterResult, Report
+from agent.company_rules import METRIC_LABELS, format_metric
+from agent.schemas import CompanyInfo, CompanyMetric, HardFilterResult, Report
 
 MAX_SCORE = 5
 ALWAYS_SHOWN_RULES = {"min_years", "employment_type", "location"}  # PASS여도 보여주는 조건
@@ -22,10 +23,15 @@ def _filter_lines(filters: HardFilterResult) -> list[str]:
     return lines
 
 
+def _as_of(metric: CompanyMetric) -> str:
+    return f" ({metric.as_of} 기준)" if metric.as_of else ""
+
+
 def _company_lines(company: CompanyInfo) -> list[str]:
     if company.error:
         return [f" · ⚠ 조사하지 못함 — {company.error}"]
     lines = [f" · {fact.text}  (출처: {fact.source_url})" for fact in company.facts]
+    lines += [f" · {METRIC_LABELS[m.name]} {format_metric(m)}{_as_of(m)}  (출처: {m.source_url})" for m in company.metrics]
     lines += [f" · ⚠ {warning}" for warning in company.warnings]
     return lines or [" · 정보 없음"]
 

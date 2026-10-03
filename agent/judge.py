@@ -9,6 +9,7 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from agent import llm
+from agent.company_rules import METRIC_LABELS, format_metric
 from agent.llm_json import chat_json, json_instruction
 from agent.profile import Profile
 from agent.schemas import CompanyInfo, HardFilterResult, JobPosting, MatchResult, Verdict
@@ -29,6 +30,7 @@ JUDGE_PROMPT = """너는 지원자의 입장에서 채용공고에 지원할지 
 
 규칙:
 - 하드 조건의 WARN 항목과 회사 주의사항은 무게를 따져 점수에 반영하고, reasons에도 적는다.
+  회사 정보의 "주의:" 항목만 경고로 다룬다. 직원 수나 매출 숫자 자체를 근거로 새 우려를 만들지 않는다.
 - reasons는 3~5개. 한 항목은 한 문장. 맞는 점을 먼저, 걸리는 점을 나중에 쓴다. 자료에 없는 내용을 지어내지 않는다.
   reasons 문장에는 G1 같은 번호를 쓰지 않는다(번호는 key_gap_ids에만).
 - key_gap_ids에는 [빈 점 후보](G번호) 중 실제로 약점이 되는 것만 최대 4개 고른다.
@@ -79,7 +81,11 @@ def _company_lines(company: CompanyInfo) -> list[str]:
         return ["조사하지 못함 (회사 정보 없이 판단한다)"]
     if not company.found:
         return ["정보 없음"]
-    return [f"- {fact.text}" for fact in company.facts] + [f"- 주의: {warning}" for warning in company.warnings]
+    return (
+        [f"- {fact.text}" for fact in company.facts]
+        + [f"- {METRIC_LABELS[m.name]}: {format_metric(m)}" for m in company.metrics]
+        + [f"- 주의: {warning}" for warning in company.warnings]
+    )
 
 
 def _number_gaps(match: MatchResult) -> dict[str, str]:

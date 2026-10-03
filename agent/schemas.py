@@ -54,9 +54,21 @@ class CompanyFact(BaseModel):
     source_url: str
 
 
+MetricName = Literal["rating", "review_count", "headcount", "joined_last_year", "left_last_year"]
+
+
+class CompanyMetric(BaseModel):
+    """출처가 있는 숫자. 경고 판정(평점·퇴사 비율)은 이 값으로 코드가 한다."""
+    name: MetricName
+    value: float
+    source_url: str
+    as_of: str | None = None  # 출처에 적힌 시점 ("2025년 5월" 등)
+
+
 class CompanyInfo(BaseModel):
     facts: list[CompanyFact]
-    warnings: list[str]  # 인원 급변, 매출 급감 등
+    metrics: list[CompanyMetric] = []
+    warnings: list[str]  # 코드가 규칙으로 계산: 낮은 평점, 높은 퇴사 비율, 출처마다 다른 수치
     found: bool
     error: str | None = None  # 조사 자체가 실패한 경우의 사유 ("찾았지만 없음"과 구분)
 

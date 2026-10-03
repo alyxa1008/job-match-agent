@@ -49,10 +49,17 @@ class Rules(BaseModel):
     strict_location: bool = False
 
 
+class CompanyRules(BaseModel):
+    min_rating: float = 3.0  # 기업 리뷰 평점이 이보다 낮으면 경고
+    min_reviews_for_rating: int = 5  # 리뷰가 이보다 적으면 평점 규칙을 적용하지 않음
+    warn_if_headcount_turnover_ratio: float = 0.4  # (최근 1년 퇴사 / 직원 수)가 이 이상이면 경고
+
+
 class Profile(BaseModel):
     me: Me
     target: Target = Target()
     rules: Rules = Rules()
+    company: CompanyRules = CompanyRules()
 
 
 def load_profile(path: Path = PROFILE_PATH) -> Profile:

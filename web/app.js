@@ -206,9 +206,17 @@ function companyLines(company) {
     `· ${fact.text} `,
     el("span", { className: "source" }, ["(출처: ", el("a", { href: fact.source_url, target: "_blank", rel: "noopener", textContent: shortUrl(fact.source_url) }), ")"]),
   ]));
+  const metrics = company.metrics.map((m) => el("li", {}, [
+    `· ${METRIC_LABELS[m.name] || m.name} ${formatMetric(m)}${m.as_of ? ` (${m.as_of} 기준)` : ""} `,
+    el("span", { className: "source" }, ["(출처: ", el("a", { href: m.source_url, target: "_blank", rel: "noopener", textContent: shortUrl(m.source_url) }), ")"]),
+  ]));
   const warnings = company.warnings.map((w) => el("li", { className: "warn-line", textContent: `⚠ ${w}` }));
-  return [...facts, ...warnings];
+  return [...facts, ...metrics, ...warnings];
 }
+
+const METRIC_LABELS = { rating: "기업 리뷰 평점", review_count: "리뷰 수", headcount: "직원 수", joined_last_year: "최근 1년 입사", left_last_year: "최근 1년 퇴사" };
+const METRIC_UNITS = { rating: "점", review_count: "개", headcount: "명", joined_last_year: "명", left_last_year: "명" };
+const formatMetric = (m) => `${m.value}${METRIC_UNITS[m.name] || ""}`;
 
 const shortUrl = (url) => { try { return new URL(url).hostname; } catch { return url; } };
 function fillList(ul, items) { ul.replaceChildren(...items); }

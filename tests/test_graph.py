@@ -87,7 +87,7 @@ def test_match_and_research_run_at_the_same_time(nodes, monkeypatch):
 def test_research_failure_does_not_stop_the_report(nodes, monkeypatch):
     called, _ = nodes
 
-    def failing_research(posting):
+    def failing_research(posting, rules):
         raise llm.LLMUnavailableError("서버 혼잡")
 
     monkeypatch.setattr(graph, "research", failing_research)

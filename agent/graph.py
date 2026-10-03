@@ -70,7 +70,7 @@ def _match(state: AnalysisState) -> dict[str, Any]:
 
 def _research(state: AnalysisState) -> dict[str, Any]:
     try:
-        return {"company": research(state["posting"])}
+        return {"company": research(state["posting"], state["profile"].company)}
     except RESEARCH_ERRORS as exc:  # 회사 조사는 보조 정보라, 실패해도 분석을 멈추지 않는다
         logger.warning("[graph] 회사 조사 실패: %s", exc)
         return {"company": CompanyInfo(facts=[], warnings=[], found=False, error=str(exc))}

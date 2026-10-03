@@ -83,7 +83,7 @@
 
 1. **숫자·규칙 판정은 LLM이 아니라 코드가 한다.** 경력 연차 비교, 고용형태, 키워드 경고는 `filters.py`의 순수 함수. LLM은 공고에서 값을 *추출*만 한다.
 2. **모든 "맞는 점"은 resume.md 원문 인용을 근거로 단다.** 인용이 resume.md에 실제로 존재하는지 코드로 검증하고, 없으면 그 항목을 버린다(환각 방지).
-3. **회사 정보는 반드시 출처 URL과 함께.** 찾지 못하면 "정보 없음"이라고 쓴다. 추측으로 채우지 않는다.
+3. **회사 정보는 반드시 출처 URL과 함께.** 찾지 못하면 "정보 없음"이라고 쓴다. 추측으로 채우지 않는다. 출처 등급(`company_rules.py`)으로 블로그·자동 집계 사이트의 정보는 버리고, 숫자 판정(평점·퇴사 비율)과 출처 간 수치 충돌 표시는 코드가 한다.
 4. **Agent다운 분기:** 하드 조건 FAIL이면 조사 생략 / 회사명이 흔하면(검색 결과에 업종이 안 맞음) 업종 키워드를 붙여 재검색(최대 2회) / 추천도 낮으면 초안 생략.
 5. **모델 교체 가능:** LLM 호출은 `agent/llm.py` 한 곳에서만. 모델명·base_url은 환경변수.
 6. **이력서는 RAG 없이 통째로 컨텍스트에 넣는다.** 5쪽 분량이라 충분히 들어간다. (README에 "필요 없어서 안 썼다"는 판단 근거를 남긴다.)
@@ -129,9 +129,16 @@ class CompanyFact(BaseModel):
     text: str
     source_url: str
 
+class CompanyMetric(BaseModel):
+    name: Literal["rating", "review_count", "headcount", "joined_last_year", "left_last_year"]
+    value: float
+    source_url: str
+    as_of: str | None                 # 출처에 적힌 시점
+
 class CompanyInfo(BaseModel):
     facts: list[CompanyFact]
-    warnings: list[str]               # 인원 급변, 매출 급감 등
+    metrics: list[CompanyMetric]      # 출처 확인·신뢰도 통과한 수치 (수치당 하나, trusted 출처 우선)
+    warnings: list[str]               # 코드가 계산: 낮은 평점, 높은 퇴사 비율, 출처마다 다른 수치
     found: bool
     error: str | None = None          # 조사 자체가 실패한 사유 ("찾았지만 없음"과 구분)
 
@@ -224,7 +231,8 @@ job-match-agent/
 │   ├── extract.py          # [extract]
 │   ├── filters.py          # [filters] 순수 함수
 │   ├── match.py            # [match] + 인용 존재 검증
-│   ├── research.py         # [research] Tool Calling 루프
+│   ├── research.py         # [research] Tool Calling 루프 (모델은 사실·수치 + 출처만 냄)
+│   ├── company_rules.py    # 출처 등급(trusted/other/low), 수치 선택·충돌 경고, profile.yaml company 규칙 판정
 │   ├── tools.py            # web_search, fetch_page
 │   ├── judge.py            # [judge] + [draft]
 │   ├── report.py           # [report] Report → Markdown
