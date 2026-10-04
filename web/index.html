@@ -24,10 +24,11 @@
           <textarea id="posting-text" rows="12" placeholder="공고 텍스트를 붙여넣으세요. 캡처만 넣어도 됩니다."></textarea>
           <div id="dropzone" class="dropzone" tabindex="0">
             <p><strong>캡처 이미지</strong>를 끌어다 놓거나, 여기를 누르고 <kbd>Ctrl</kbd>+<kbd>V</kbd>로 붙여넣으세요.</p>
-            <p class="hint">png·jpg, 최대 6장. 주요업무부터 근무조건까지 다 보이게 2~3장으로 나눠 찍는 게 좋습니다.</p>
+            <p class="hint">png·jpg, 최대 6장. 주요업무부터 근무조건까지 다 보이게 2~3장으로 나눠 찍는 게 좋습니다. 위쪽 화면부터 넣고, 순서는 썸네일을 끌어서 바꿉니다.</p>
             <input id="file-input" type="file" accept="image/png,image/jpeg" multiple hidden>
           </div>
           <ul id="thumbs" class="thumbs"></ul>
+          <p id="thumb-count" class="hint"></p>
           <div class="actions">
             <button id="analyze-btn" class="primary">분석하기</button>
             <button id="clear-btn" class="ghost">지우기</button>

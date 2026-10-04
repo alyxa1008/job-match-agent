@@ -49,14 +49,48 @@ function droppedFiles(dataTransfer) {
   return [...dataTransfer.items].filter((i) => i.kind === "file").map((i) => i.getAsFile()).filter(Boolean);
 }
 
+let draggingIndex = null; // 썸네일을 끌어 순서를 바꾸는 중이면 그 위치 (파일 끌어넣기와 구분)
+
+function moveFile(from, to) {
+  if (from === to) return;
+  const [moved] = files.splice(from, 1);
+  files.splice(to, 0, moved);
+  renderThumbs();
+}
+
 function renderThumbs() {
   const ul = $("#thumbs");
   ul.replaceChildren(...files.map((file, index) => {
     const img = el("img", { src: URL.createObjectURL(file), alt: file.name });
-    const remove = el("button", { textContent: "×", title: "빼기" });
+    const order = el("span", { className: "order", textContent: String(index + 1) });
+    const remove = el("button", { className: "remove", textContent: "×", title: "빼기" });
     remove.addEventListener("click", () => { files.splice(index, 1); renderThumbs(); });
-    return el("li", {}, [img, remove]);
+    const li = el("li", { draggable: true, title: "끌어서 순서 바꾸기" }, [img, order, remove]);
+    li.addEventListener("dragstart", (e) => {
+      draggingIndex = index;
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", String(index));
+      li.classList.add("is-dragging");
+    });
+    li.addEventListener("dragend", () => { draggingIndex = null; renderThumbs(); });
+    li.addEventListener("dragover", (e) => {
+      if (draggingIndex === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      li.classList.add("is-target");
+    });
+    li.addEventListener("dragleave", () => li.classList.remove("is-target"));
+    li.addEventListener("drop", (e) => {
+      if (draggingIndex === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      moveFile(draggingIndex, index);
+      draggingIndex = null;
+    });
+    return li;
   }));
+  const count = $("#thumb-count");
+  count.textContent = files.length ? `캡처 ${files.length}장 — 번호 순서대로 한 공고로 읽습니다` : "";
 }
 
 dropzone.addEventListener("click", () => fileInput.click());
@@ -65,6 +99,7 @@ fileInput.addEventListener("change", () => { addFiles(fileInput.files); fileInpu
 // 페이지 어디에 떨어뜨려도 받는다. 기본 동작(브라우저가 이미지 파일을 열어 버림)은 막는다.
 document.addEventListener("dragover", (e) => {
   e.preventDefault();
+  if (draggingIndex !== null) return; // 썸네일 순서 바꾸는 중
   e.dataTransfer.dropEffect = "copy";
   dropzone.classList.add("is-over");
 });
@@ -72,6 +107,7 @@ document.addEventListener("dragleave", (e) => { if (!e.relatedTarget) dropzone.c
 document.addEventListener("drop", (e) => {
   e.preventDefault();
   dropzone.classList.remove("is-over");
+  if (draggingIndex !== null) return;
   addFiles(droppedFiles(e.dataTransfer));
 });
 document.addEventListener("paste", (e) => {
